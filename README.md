@@ -34,6 +34,11 @@ Processing 100000 Messgaes [100000/100000] ████████████�
 
 you can see the output of all job logs like this:
 ```
-❯ k logs -laction=get
+❯ kubectl logs -laction=get
+```
+
+When you are finished, remove all the jobs:
+```
+helm uninstall dynamodbtester
 ```
 
