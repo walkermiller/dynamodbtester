@@ -22,21 +22,28 @@ type Entry struct {
 	AccountId  int
 }
 
-var svc *dynamodb.DynamoDB = dynamodb.New(session.New())
-var messages int
-var messagestoprocess int
-var threads int
-var action string
+var svc *dynamodb.DynamoDB = dynamodb.New(session.Must(session.NewSessionWithOptions(session.Options{
+	SharedConfigState: session.SharedConfigEnable,
+})))
+
+var messages, messagestoprocess, threads int
+var action, table, primaryKey string
 var batch bool
 var startTime time.Time
 
 var p *pterm.ProgressbarPrinter
 
 func main() {
+	// mySession, _ := session.NewSession(&aws.Config{
+	// 	EnableEndpointDiscovery: aws.Bool(true),
+	// })
+	// svc = dynamodb.New(mySession)
 
 	flag.IntVar(&messagestoprocess, "messages", LookupEnvOrInt("MESSAGES", 100), "messages to run per thread")
 	flag.IntVar(&threads, "threads", LookupEnvOrInt("THREADS", 10), "number of threads to run")
 	flag.StringVar(&action, "action", LookupEnvOrString("ACTION", "put"), "specify put or get. Defaults to put")
+	flag.StringVar(&table, "table", LookupEnvOrString("TABLE", "Test"), "Table name to use. Defaults to Test")
+	flag.StringVar(&primaryKey, "primaryKey", LookupEnvOrString("PRIMARYKEY", "ResourceId"), "Primary Key to use. Defaults to ResourceId")
 	flag.BoolVar(&batch, "batch", false, "batch requests up or not. Default is false")
 	flag.Parse()
 
@@ -45,7 +52,7 @@ func main() {
 
 	totalMessages := messagestoprocess * threads
 
-	p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(fmt.Sprintf("Processing %d Messgaes", totalMessages)).Start()
+	p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(fmt.Sprintf("Processing %d Messages", totalMessages)).Start()
 
 	var wg sync.WaitGroup
 	// log.Printf("Running for %d seconds", desiredduration)
@@ -90,16 +97,20 @@ func putItems(startPosition int, thread int) {
 
 	for i := startPosition; i < startPosition+25; i++ {
 
-		av, err := dynamodbattribute.MarshalMap(Entry{
-			ResourceId: i,
-			AccountId:  i,
-		})
-		if err != nil {
-			log.Fatalf("Thread %d got error when Marshalling: %s", thread, err)
-		}
+		// av, err := dynamodbattribute.MarshalMap(Entry{
+		// 	ResourceId: i,
+		// 	AccountId:  i,
+		// })
+		// if err != nil {
+		// 	log.Fatalf("Thread %d got error when Marshalling: %s", thread, err)
+		// }
 		request := &dynamodb.WriteRequest{
 			PutRequest: &dynamodb.PutRequest{
-				Item: av,
+				Item: map[string]*dynamodb.AttributeValue{
+					primaryKey: {
+						N: aws.String(strconv.Itoa(i)),
+					},
+				},
 			},
 		}
 
@@ -110,7 +121,7 @@ func putItems(startPosition int, thread int) {
 
 	input := &dynamodb.BatchWriteItemInput{
 		RequestItems: map[string][]*dynamodb.WriteRequest{
-			"Test": items,
+			table: items,
 		},
 	}
 
@@ -125,15 +136,16 @@ func putItems(startPosition int, thread int) {
 
 func getItem(resourceId string) {
 
+	// log.Printf("Getting item from %s with primary key %s = %s", table, primaryKey, resourceId)
 	input := &dynamodb.GetItemInput{
-		TableName: aws.String("Test"),
+		TableName: aws.String(table),
 		Key: map[string]*dynamodb.AttributeValue{
-			"ResourceId": {
+			primaryKey: {
 				N: aws.String(resourceId),
 			},
 		},
 	}
-
+	// println(input.Key)
 	result, err := svc.GetItem(input)
 	if err != nil {
 		log.Fatalf("Got error calling GetItem: %s", err)
@@ -159,7 +171,7 @@ func batchGetItem(startPosition int) {
 	for i := startPosition; i < startPosition+25; i++ {
 
 		newEntry := map[string]*dynamodb.AttributeValue{
-			"ResourceId": {
+			primaryKey: {
 				N: aws.String(strconv.Itoa(i)),
 			},
 		}
@@ -169,7 +181,7 @@ func batchGetItem(startPosition int) {
 
 	input := &dynamodb.BatchGetItemInput{
 		RequestItems: map[string]*dynamodb.KeysAndAttributes{
-			"Test": {
+			table: {
 				Keys: items,
 			},
 		},
