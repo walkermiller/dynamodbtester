@@ -10,7 +10,7 @@ spec:
       labels:
         action: get
     spec:
-      serviceAccountName: dynamodbtester
+      serviceAccountName: dynamodb
       restartPolicy: Never
       containers:
       - name: dynamodbtester
@@ -22,10 +22,14 @@ spec:
             value: {{ quote $.Values.threads }}
           - name: ACTION
             value: get
+          - name: TABLE
+            value: {{ quote $.Values.table }}
+          - name: PRIMARYKEY
+            value: {{ quote $.Values.primaryKey }}
           - name: AWS_REGION
             value: us-east-1
           - name: AWS_SDK_LOAD_CONFIG
-            value: "true"   
+            value: "true"
 ---
 {{- end }}
 {{- range until (.Values.put_jobs | int ) }}
@@ -52,6 +56,10 @@ spec:
             value: {{ quote $.Values.threads}}
           - name: ACTION
             value: put
+          - name: TABLE
+            value: {{ quote $.Values.table }}
+          - name: PRIMARYKEY
+            value: {{ quote $.Values.primaryKey }}
           - name: AWS_REGION
             value: us-east-1
           - name: AWS_SDK_LOAD_CONFIG

@@ -1,5 +1,5 @@
 get_jobs: 100
-#put_jobs: 100
+#put_jobs: 1
 threads: 100
 messages: 1000
 image: public.ecr.aws/j6o4r1h6/dynamodbtester
