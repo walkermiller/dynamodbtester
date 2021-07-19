@@ -1,0 +1,4 @@
+get_jobs: 100
+#put_jobs: 100
+threads: 100
+messages: 1000

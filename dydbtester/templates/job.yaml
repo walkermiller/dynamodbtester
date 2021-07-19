@@ -1,0 +1,53 @@
+{{- range until (.Values.get_jobs | int) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dydbtester-get- {{- . }}
+spec:
+  ttlSecondsAfterFinished: 60
+  template:
+    spec:
+      serviceAccountName: dynamodbtester
+      restartPolicy: Never
+      containers:
+      - name: dynamodbtester
+        image: awalkerm/dynamodbtester
+        env:
+          - name: MESSAGES
+            value: {{ quote $.Values.messages }}
+          - name: THREADS
+            value: {{ quote $.Values.threads }}
+          - name: ACTION
+            value: get
+          - name: AWS_REGION
+            value: us-east-1
+          - name: AWS_SDK_LOAD_CONFIG
+            value: "true"   
+---
+{{- end }}
+{{- range until (.Values.put_jobs | int ) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dydbtester-put- {{- . }}
+spec:
+  template:
+    ttlSecondsAfterFinished: 60
+    spec:
+      serviceAccountName: dynamodb
+      restartPolicy: Never
+      containers:
+      - name: dynamodbtester
+        image: awalkerm/dynamodbtester
+        env:
+          - name: MESSAGES
+            value: {{ quote $.Values.messages}}
+          - name: THREADS
+            value: {{ quote $.Values.threads}}
+          - name: ACTION
+            value: put
+          - name: AWS_REGION
+            value: us-east-1
+          - name: AWS_SDK_LOAD_CONFIG
+            value: "true"   
+{{- end }}
