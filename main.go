@@ -27,7 +27,7 @@ var svc *dynamodb.DynamoDB = dynamodb.New(session.Must(session.NewSessionWithOpt
 })))
 
 var messages, messagestoprocess, threads int
-var action, table, primaryKey string
+var action, table, primaryKey, sortKey string
 var batch bool
 var startTime time.Time
 
@@ -44,6 +44,7 @@ func main() {
 	flag.StringVar(&action, "action", LookupEnvOrString("ACTION", "put"), "specify put or get. Defaults to put")
 	flag.StringVar(&table, "table", LookupEnvOrString("TABLE", "Test"), "Table name to use. Defaults to Test")
 	flag.StringVar(&primaryKey, "primaryKey", LookupEnvOrString("PRIMARYKEY", "ResourceId"), "Primary Key to use. Defaults to ResourceId")
+	flag.StringVar(&sortKey, "sortKey", LookupEnvOrString("SORTKEY", "AccountId"), "Primary Key to use. Defaults to AccountId")
 	flag.BoolVar(&batch, "batch", false, "batch requests up or not. Default is false")
 	flag.Parse()
 
@@ -97,17 +98,13 @@ func putItems(startPosition int, thread int) {
 
 	for i := startPosition; i < startPosition+25; i++ {
 
-		// av, err := dynamodbattribute.MarshalMap(Entry{
-		// 	ResourceId: i,
-		// 	AccountId:  i,
-		// })
-		// if err != nil {
-		// 	log.Fatalf("Thread %d got error when Marshalling: %s", thread, err)
-		// }
 		request := &dynamodb.WriteRequest{
 			PutRequest: &dynamodb.PutRequest{
 				Item: map[string]*dynamodb.AttributeValue{
 					primaryKey: {
+						N: aws.String(strconv.Itoa(i)),
+					},
+					sortKey: {
 						N: aws.String(strconv.Itoa(i)),
 					},
 				},
@@ -141,6 +138,9 @@ func getItem(resourceId string) {
 		TableName: aws.String(table),
 		Key: map[string]*dynamodb.AttributeValue{
 			primaryKey: {
+				N: aws.String(resourceId),
+			},
+			sortKey: {
 				N: aws.String(resourceId),
 			},
 		},

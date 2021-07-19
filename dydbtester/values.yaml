@@ -3,3 +3,6 @@ get_jobs: 100
 threads: 100
 messages: 1000
 image: public.ecr.aws/j6o4r1h6/dynamodbtester
+primaryKey: accountId
+sortKey: pendingTransactionId
+table: pending_transaction_events
