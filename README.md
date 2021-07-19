@@ -11,7 +11,7 @@ You will also need to have helm installed locally
 ## Running
 Clone the Repo
 ```
-git clone 
+git clone https://github.com/walkermiller/dynamodbtester.git
 ```
 Modify the values.yaml file to match your desired values
 ```
