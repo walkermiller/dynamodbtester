@@ -6,12 +6,15 @@ metadata:
 spec:
   ttlSecondsAfterFinished: 60
   template:
+    metadata:
+      labels:
+        action: get
     spec:
       serviceAccountName: dynamodbtester
       restartPolicy: Never
       containers:
       - name: dynamodbtester
-        image: awalkerm/dynamodbtester
+        image: {{ quote $.Values.image }}
         env:
           - name: MESSAGES
             value: {{ quote $.Values.messages }}
@@ -31,14 +34,17 @@ kind: Job
 metadata:
   name: dydbtester-put- {{- . }}
 spec:
+  ttlSecondsAfterFinished: 60
   template:
-    ttlSecondsAfterFinished: 60
+    metadata:
+      labels:
+        action: get
     spec:
       serviceAccountName: dynamodb
       restartPolicy: Never
       containers:
       - name: dynamodbtester
-        image: awalkerm/dynamodbtester
+        image: {{ quote $.Values.image }}
         env:
           - name: MESSAGES
             value: {{ quote $.Values.messages}}

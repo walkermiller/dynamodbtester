@@ -30,6 +30,10 @@ You can look at the logs of the jobs as they complete:
 ```
 ❯ kubectl logs dydbtester-get-99-wmktm        
 Processing 100000 Messgaes [100000/100000] ███████████████████████████ 100% | 9s
+```
 
+you can see the output of all job logs like this:
+```
+❯ k logs -laction=get
 ```
 
