@@ -43,12 +43,11 @@ func main() {
 	flag.IntVar(&threads, "threads", LookupEnvOrInt("THREADS", 10), "number of threads to run")
 	flag.StringVar(&action, "action", LookupEnvOrString("ACTION", "put"), "specify put or get. Defaults to put")
 	flag.StringVar(&table, "table", LookupEnvOrString("TABLE", "Test"), "Table name to use. Defaults to Test")
-	flag.StringVar(&primaryKey, "primaryKey", LookupEnvOrString("PRIMARYKEY", "ResourceId"), "Primary Key to use. Defaults to ResourceId")
-	flag.StringVar(&sortKey, "sortKey", LookupEnvOrString("SORTKEY", "AccountId"), "Primary Key to use. Defaults to AccountId")
+	flag.StringVar(&primaryKey, "primaryKey", LookupEnvOrString("PRIMARYKEY", "AccountId"), "Primary Key to use. Defaults to ResourceId")
+	flag.StringVar(&sortKey, "sortKey", LookupEnvOrString("SORTKEY", "ResourceId"), "Primary Key to use. Defaults to AccountId")
 	flag.BoolVar(&batch, "batch", false, "batch requests up or not. Default is false")
 	flag.Parse()
 
-	thread := 1
 	startTime = time.Now()
 
 	totalMessages := messagestoprocess * threads
@@ -56,16 +55,14 @@ func main() {
 	p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(fmt.Sprintf("Processing %d Messages", totalMessages)).Start()
 
 	var wg sync.WaitGroup
-	// log.Printf("Running for %d seconds", desiredduration)
 
 	for i := 1; i < threads+1; i++ {
 		wg.Add(1)
 		switch action {
 		case "put":
-			go threadPut(messagestoprocess, &wg, thread)
+			go threadPut(messagestoprocess, &wg, i)
 		case "get":
-			go threadGet(messagestoprocess, &wg, thread)
-			thread++
+			go threadGet(messagestoprocess, &wg, i)
 		}
 
 	}
@@ -102,7 +99,7 @@ func putItems(startPosition int, thread int) {
 			PutRequest: &dynamodb.PutRequest{
 				Item: map[string]*dynamodb.AttributeValue{
 					primaryKey: {
-						N: aws.String(strconv.Itoa(i)),
+						N: aws.String(strconv.Itoa(thread)),
 					},
 					sortKey: {
 						N: aws.String(strconv.Itoa(i)),
@@ -113,7 +110,7 @@ func putItems(startPosition int, thread int) {
 
 		items = append(items, request)
 		messages++
-
+		// =log.Printf("Thread: %d, Number: %d", thread, i)
 	}
 
 	input := &dynamodb.BatchWriteItemInput{
@@ -131,17 +128,17 @@ func putItems(startPosition int, thread int) {
 
 }
 
-func getItem(resourceId string) {
-
+func getItem(primaryKeyValue, sortKeyValue string) {
+	defer p.Increment()
 	// log.Printf("Getting item from %s with primary key %s = %s", table, primaryKey, resourceId)
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String(table),
 		Key: map[string]*dynamodb.AttributeValue{
 			primaryKey: {
-				N: aws.String(resourceId),
+				N: aws.String(primaryKeyValue),
 			},
 			sortKey: {
-				N: aws.String(resourceId),
+				N: aws.String(sortKeyValue),
 			},
 		},
 	}
@@ -151,7 +148,7 @@ func getItem(resourceId string) {
 		log.Fatalf("Got error calling GetItem: %s", err)
 	}
 	if result.Item == nil {
-		msg := "Could not find '" + resourceId + "'"
+		msg, _ := fmt.Printf("Could not find primaryKey %s with sortKey %s", primaryKeyValue, sortKeyValue)
 		log.Print(msg)
 	}
 
@@ -212,25 +209,25 @@ func batchGetItem(startPosition int) {
 }
 
 func threadPut(m int, wg *sync.WaitGroup, thread int) {
-	// defer p.Add(m)
+	defer p.Add(m)
 	defer wg.Done()
 
 	for i := 1; i < m+1; i += 25 {
-		putItems((thread-1)*m+1, thread)
+		putItems(((thread-1)*m)+1, thread)
 	}
 
 }
 
 func threadGet(m int, wg *sync.WaitGroup, thread int) {
 	defer wg.Done()
-	defer p.Add(m)
+	// defer p.Add(m)
 	for i := 1; i < m+1; i += 1 {
 		switch batch {
 		case true:
 			batchGetItem((thread-1)*m + 1)
-		case false:
-			getItem(strconv.Itoa((thread-1)*m + 1))
 			i += 24
+		case false:
+			getItem(strconv.Itoa(thread), strconv.Itoa(((thread-1)*m)+1))
 		}
 	}
 }
