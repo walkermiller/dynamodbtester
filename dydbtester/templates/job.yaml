@@ -1,3 +1,35 @@
+{{- range until (.Values.guery_jobs | int) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dydbtester-query- {{- . }}
+spec:
+  ttlSecondsAfterFinished: 60
+  template:
+    metadata:
+      labels:
+        action: query
+    spec:
+      serviceAccountName: dynamodb
+      restartPolicy: Never
+      containers:
+      - name: dynamodbtester
+        image: {{ quote $.Values.image }}
+        env:
+          - name: THREADS
+            value: {{ quote $.Values.threads }}
+          - name: ACTION
+            value: query
+          - name: TABLE
+            value: {{ quote $.Values.table }}
+          - name: PRIMARYKEY
+            value: {{ quote $.Values.primaryKey }}
+          - name: AWS_REGION
+            value: us-east-1
+          - name: AWS_SDK_LOAD_CONFIG
+            value: "true"
+---
+{{- end }}
 {{- range until (.Values.get_jobs | int) }}
 apiVersion: batch/v1
 kind: Job
@@ -26,6 +58,8 @@ spec:
             value: {{ quote $.Values.table }}
           - name: PRIMARYKEY
             value: {{ quote $.Values.primaryKey }}
+          - name: SORTKEY
+            value: {{ quote $.Values.sortKey }}
           - name: AWS_REGION
             value: us-east-1
           - name: AWS_SDK_LOAD_CONFIG
