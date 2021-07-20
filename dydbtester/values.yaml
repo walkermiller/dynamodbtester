@@ -1,8 +1,9 @@
-get_jobs: 100
+#batch_get_jobs: 25
+query_jobs: 100
 #put_jobs: 1
 threads: 100
-messages: 1000
-image: public.ecr.aws/j6o4r1h6/dynamodbtester
-primaryKey: accountId
-sortKey: pendingTransactionId
-table: pending_transaction_events
+messages: 10000
+image: public.ecr.aws/j6o4r1h6/dynamodbtester:test
+primaryKey: AccountId
+sortKey: ResourceId
+table: Test
