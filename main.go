@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,8 +29,10 @@ var svc *dynamodb.DynamoDB = dynamodb.New(session.Must(session.NewSessionWithOpt
 
 var messages, messagestoprocess, threads int
 var action, table, primaryKey, sortKey string
-var batch bool
+var batch, logswitch bool
 var startTime time.Time
+
+var results []string
 
 var p *pterm.ProgressbarPrinter
 
@@ -46,9 +49,14 @@ func main() {
 	flag.StringVar(&primaryKey, "primaryKey", LookupEnvOrString("PRIMARYKEY", "AccountId"), "Primary Key to use. Defaults to ResourceId")
 	flag.StringVar(&sortKey, "sortKey", LookupEnvOrString("SORTKEY", "ResourceId"), "Primary Key to use. Defaults to AccountId")
 	flag.BoolVar(&batch, "batch", false, "batch requests up or not. Default is false")
+	flag.BoolVar(&logswitch, "log", false, "log results or not. Default is false")
 	flag.Parse()
 
 	startTime = time.Now()
+
+	if action == "query" {
+		messagestoprocess = 1
+	}
 
 	totalMessages := messagestoprocess * threads
 
@@ -63,11 +71,17 @@ func main() {
 			go threadPut(messagestoprocess, &wg, i)
 		case "get":
 			go threadGet(messagestoprocess, &wg, i)
+		case "query":
+			go threadQuery(&wg, i)
 		}
 
 	}
 
 	wg.Wait()
+
+	if logswitch {
+		print(strings.Join(results, "\n"))
+	}
 
 }
 
@@ -129,7 +143,7 @@ func putItems(startPosition int, thread int) {
 }
 
 func getItem(primaryKeyValue, sortKeyValue string) {
-	defer p.Increment()
+	// defer p.Increment()
 	// log.Printf("Getting item from %s with primary key %s = %s", table, primaryKey, resourceId)
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String(table),
@@ -161,7 +175,7 @@ func getItem(primaryKeyValue, sortKeyValue string) {
 
 }
 
-func batchGetItem(startPosition int) {
+func batchGetItem(startPosition, thread int) {
 
 	var items []map[string]*dynamodb.AttributeValue
 
@@ -169,6 +183,9 @@ func batchGetItem(startPosition int) {
 
 		newEntry := map[string]*dynamodb.AttributeValue{
 			primaryKey: {
+				N: aws.String(strconv.Itoa(thread)),
+			},
+			sortKey: {
 				N: aws.String(strconv.Itoa(i)),
 			},
 		}
@@ -208,26 +225,74 @@ func batchGetItem(startPosition int) {
 	}
 }
 
+func query(primaryKeyValue int) {
+	input := &dynamodb.QueryInput{
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":v1": {
+				N: aws.String(strconv.Itoa(primaryKeyValue)),
+			},
+		},
+		KeyConditionExpression: aws.String(fmt.Sprintf("%s = :v1", primaryKey)),
+		TableName:              aws.String(table),
+	}
+
+	result, err := svc.Query(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case dynamodb.ErrCodeProvisionedThroughputExceededException:
+				fmt.Println(dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
+			case dynamodb.ErrCodeResourceNotFoundException:
+				fmt.Println(dynamodb.ErrCodeResourceNotFoundException, aerr.Error())
+			case dynamodb.ErrCodeRequestLimitExceeded:
+				fmt.Println(dynamodb.ErrCodeRequestLimitExceeded, aerr.Error())
+			case dynamodb.ErrCodeInternalServerError:
+				fmt.Println(dynamodb.ErrCodeInternalServerError, aerr.Error())
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+		return
+	}
+
+	recordResult(result.String())
+}
+
 func threadPut(m int, wg *sync.WaitGroup, thread int) {
 	defer p.Add(m)
 	defer wg.Done()
 
 	for i := 1; i < m+1; i += 25 {
-		putItems(((thread-1)*m)+1, thread)
+		putItems(((thread-1)*m)+i, thread)
 	}
 
 }
 
 func threadGet(m int, wg *sync.WaitGroup, thread int) {
 	defer wg.Done()
-	// defer p.Add(m)
+	defer p.Add(m)
 	for i := 1; i < m+1; i += 1 {
 		switch batch {
 		case true:
-			batchGetItem((thread-1)*m + 1)
+			batchGetItem((thread-1)*m+1, thread)
 			i += 24
 		case false:
 			getItem(strconv.Itoa(thread), strconv.Itoa(((thread-1)*m)+1))
 		}
 	}
+}
+
+func threadQuery(wg *sync.WaitGroup, thread int) {
+	defer wg.Done()
+	defer p.Increment()
+	query(thread)
+
+}
+
+func recordResult(result string) {
+	results = append(results, result)
 }
