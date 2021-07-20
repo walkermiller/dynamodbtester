@@ -105,8 +105,10 @@ func LookupEnvOrInt(key string, defaultVal int) int {
 }
 
 func LookupEnvOrBool(key string, defaultVal bool) bool {
-	if _, ok := os.LookupEnv(key); ok {
-		return true
+	if val, ok := os.LookupEnv(key); ok {
+		if val == "True" {
+			return true
+		}
 	}
 	return defaultVal
 }
@@ -141,11 +143,11 @@ func putItems(startPosition int, thread int) {
 		},
 	}
 
-	result, err := svc.BatchWriteItem(input)
+	_, err := svc.BatchWriteItem(input)
 	if err != nil {
 		log.Fatalf("Thread %d Got error calling BatchWriteItem: %s", thread, err)
 	}
-	logResult(result.String())
+	// logResult(result.String())
 	// log.Printf("Thread %d finished %d", thread, finalPosition)
 
 }
@@ -165,21 +167,21 @@ func getItem(primaryKeyValue, sortKeyValue string) {
 		},
 	}
 	// println(input.Key)
-	result, err := svc.GetItem(input)
+	_, err := svc.GetItem(input)
 	if err != nil {
 		log.Fatalf("Got error calling GetItem: %s", err)
 	}
-	if result.Item == nil {
-		msg, _ := fmt.Printf("Could not find primaryKey %s with sortKey %s", primaryKeyValue, sortKeyValue)
-		log.Print(msg)
-	}
+	// if result.Item == nil {
+	// 	msg, _ := fmt.Printf("Could not find primaryKey %s with sortKey %s", primaryKeyValue, sortKeyValue)
+	// 	log.Print(msg)
+	// }
 
 	// err = dynamodbattribute.UnmarshalMap(result.Item, &item)
 	// if err != nil {
 	// 	panic(fmt.Sprintf("Failed to unmarshal Record, %v", err))
 	// }
 
-	logResult(result.String())
+	// logResult(result.String())
 }
 
 func batchGetItem(startPosition, thread int) {
@@ -208,7 +210,7 @@ func batchGetItem(startPosition, thread int) {
 		},
 	}
 
-	result, err := svc.BatchGetItem(input)
+	_, err := svc.BatchGetItem(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -230,7 +232,7 @@ func batchGetItem(startPosition, thread int) {
 		}
 		return
 	}
-	logResult(result.String())
+	// logResult(result.String())
 
 }
 
@@ -245,7 +247,7 @@ func query(primaryKeyValue int) {
 		TableName:              aws.String(table),
 	}
 
-	result, err := svc.Query(input)
+	_, err := svc.Query(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -268,7 +270,7 @@ func query(primaryKeyValue int) {
 		return
 	}
 
-	logResult(result.String())
+	// logResult(result.String())
 }
 
 func threadPut(m int, wg *sync.WaitGroup, thread int) {
