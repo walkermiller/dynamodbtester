@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/pterm/pterm"
 )
 
@@ -48,8 +47,8 @@ func main() {
 	flag.StringVar(&table, "table", LookupEnvOrString("TABLE", "Test"), "Table name to use. Defaults to Test")
 	flag.StringVar(&primaryKey, "primaryKey", LookupEnvOrString("PRIMARYKEY", "AccountId"), "Primary Key to use. Defaults to ResourceId")
 	flag.StringVar(&sortKey, "sortKey", LookupEnvOrString("SORTKEY", "ResourceId"), "Primary Key to use. Defaults to AccountId")
-	flag.BoolVar(&batch, "batch", false, "batch requests up or not. Default is false")
-	flag.BoolVar(&logswitch, "log", false, "log results or not. Default is false")
+	flag.BoolVar(&batch, "batch", LookupEnvOrBool("BATCH", false), "batch requests up or not. Default is false")
+	flag.BoolVar(&logswitch, "log", LookupEnvOrBool("LOG", false), "log results or not. Default is false")
 	flag.Parse()
 
 	startTime = time.Now()
@@ -60,7 +59,9 @@ func main() {
 
 	totalMessages := messagestoprocess * threads
 
-	p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(fmt.Sprintf("Processing %d Messages", totalMessages)).Start()
+	if logswitch == false {
+		p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(fmt.Sprintf("Processing %d Messages", totalMessages)).Start()
+	}
 
 	var wg sync.WaitGroup
 
@@ -103,6 +104,13 @@ func LookupEnvOrInt(key string, defaultVal int) int {
 	return defaultVal
 }
 
+func LookupEnvOrBool(key string, defaultVal bool) bool {
+	if _, ok := os.LookupEnv(key); ok {
+		return true
+	}
+	return defaultVal
+}
+
 func putItems(startPosition int, thread int) {
 
 	var items []*dynamodb.WriteRequest
@@ -133,11 +141,11 @@ func putItems(startPosition int, thread int) {
 		},
 	}
 
-	_, err := svc.BatchWriteItem(input)
+	result, err := svc.BatchWriteItem(input)
 	if err != nil {
 		log.Fatalf("Thread %d Got error calling BatchWriteItem: %s", thread, err)
 	}
-
+	logResult(result.String())
 	// log.Printf("Thread %d finished %d", thread, finalPosition)
 
 }
@@ -166,20 +174,19 @@ func getItem(primaryKeyValue, sortKeyValue string) {
 		log.Print(msg)
 	}
 
-	item := Entry{}
+	// err = dynamodbattribute.UnmarshalMap(result.Item, &item)
+	// if err != nil {
+	// 	panic(fmt.Sprintf("Failed to unmarshal Record, %v", err))
+	// }
 
-	err = dynamodbattribute.UnmarshalMap(result.Item, &item)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to unmarshal Record, %v", err))
-	}
-
+	logResult(result.String())
 }
 
 func batchGetItem(startPosition, thread int) {
 
 	var items []map[string]*dynamodb.AttributeValue
 
-	for i := startPosition; i < startPosition+25; i++ {
+	for i := startPosition; i < startPosition+100; i++ {
 
 		newEntry := map[string]*dynamodb.AttributeValue{
 			primaryKey: {
@@ -201,7 +208,7 @@ func batchGetItem(startPosition, thread int) {
 		},
 	}
 
-	_, err := svc.BatchGetItem(input)
+	result, err := svc.BatchGetItem(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -223,6 +230,8 @@ func batchGetItem(startPosition, thread int) {
 		}
 		return
 	}
+	logResult(result.String())
+
 }
 
 func query(primaryKeyValue int) {
@@ -259,11 +268,11 @@ func query(primaryKeyValue int) {
 		return
 	}
 
-	recordResult(result.String())
+	logResult(result.String())
 }
 
 func threadPut(m int, wg *sync.WaitGroup, thread int) {
-	defer p.Add(m)
+	defer incrementPB(m)
 	defer wg.Done()
 
 	for i := 1; i < m+1; i += 25 {
@@ -274,12 +283,12 @@ func threadPut(m int, wg *sync.WaitGroup, thread int) {
 
 func threadGet(m int, wg *sync.WaitGroup, thread int) {
 	defer wg.Done()
-	defer p.Add(m)
+	defer incrementPB(m)
 	for i := 1; i < m+1; i += 1 {
 		switch batch {
 		case true:
-			batchGetItem((thread-1)*m+1, thread)
-			i += 24
+			batchGetItem((thread-1)*m+i, thread)
+			i += 99
 		case false:
 			getItem(strconv.Itoa(thread), strconv.Itoa(((thread-1)*m)+1))
 		}
@@ -288,11 +297,19 @@ func threadGet(m int, wg *sync.WaitGroup, thread int) {
 
 func threadQuery(wg *sync.WaitGroup, thread int) {
 	defer wg.Done()
-	defer p.Increment()
+	defer incrementPB(1)
 	query(thread)
 
 }
 
-func recordResult(result string) {
-	results = append(results, result)
+func logResult(result string) {
+	if logswitch == true {
+		log.Println(result)
+	}
+}
+
+func incrementPB(i int) {
+	if logswitch == false {
+		p.Add(i)
+	}
 }
