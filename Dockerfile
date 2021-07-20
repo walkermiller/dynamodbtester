@@ -5,12 +5,11 @@ COPY go.mod .
 COPY go.sum .
 RUN go mod download
 COPY main.go . 
-RUN go build .
-
+RUN go build -o dydbtester
 
 FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build app/dynamodbtester /dydbtester
+COPY --from=build app/dydbtester /dydbtester
 ENV AWS_REGION=us-east-1
 ENTRYPOINT ["/dydbtester"]
 
