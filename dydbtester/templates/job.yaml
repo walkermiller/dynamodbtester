@@ -1,4 +1,4 @@
-{{- range until (.Values.guery_jobs | int) }}
+{{- range until (.Values.query_jobs | int) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -28,6 +28,52 @@ spec:
             value: us-east-1
           - name: AWS_SDK_LOAD_CONFIG
             value: "true"
+        resources:
+          requests:
+            memory: 1024M
+            cpu: 250m
+---
+{{- end }}
+{{- range until (.Values.batch_get_jobs | int) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dydbtester-batch-get- {{- . }}
+spec:
+  ttlSecondsAfterFinished: 60
+  template:
+    metadata:
+      labels:
+        action: batch-get
+    spec:
+      serviceAccountName: dynamodb
+      restartPolicy: Never
+      containers:
+      - name: dynamodbtester
+        image: {{ quote $.Values.image }}
+        resources:
+          requests:
+            memory: 1024M
+            cpu: 250m
+        env:
+          - name: MESSAGES
+            value: {{ quote $.Values.messages }}
+          - name: THREADS
+            value: {{ quote $.Values.threads }}
+          - name: ACTION
+            value: get
+          - name: TABLE
+            value: {{ quote $.Values.table }}
+          - name: PRIMARYKEY
+            value: {{ quote $.Values.primaryKey }}
+          - name: SORTKEY
+            value: {{ quote $.Values.sortKey }}
+          - name: BATCH
+            value: "true"
+          - name: AWS_REGION
+            value: us-east-1
+          - name: AWS_SDK_LOAD_CONFIG
+            value: "true"
 ---
 {{- end }}
 {{- range until (.Values.get_jobs | int) }}
@@ -47,6 +93,10 @@ spec:
       containers:
       - name: dynamodbtester
         image: {{ quote $.Values.image }}
+        resources:
+          requests:
+            memory: 1024M
+            cpu: 250m
         env:
           - name: MESSAGES
             value: {{ quote $.Values.messages }}
