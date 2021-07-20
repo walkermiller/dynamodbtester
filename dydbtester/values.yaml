@@ -7,3 +7,4 @@ image: public.ecr.aws/j6o4r1h6/dynamodbtester:test
 primaryKey: AccountId
 sortKey: ResourceId
 table: Test
+Log: 

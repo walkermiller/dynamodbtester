@@ -28,6 +28,8 @@ spec:
             value: us-east-1
           - name: AWS_SDK_LOAD_CONFIG
             value: "true"
+          - name: LOG
+            value: {{ quote $.Values.log }}
         resources:
           requests:
             memory: 1024M
@@ -74,6 +76,8 @@ spec:
             value: us-east-1
           - name: AWS_SDK_LOAD_CONFIG
             value: "true"
+          - name: LOG
+            value: {{ quote $.Values.log }}
 ---
 {{- end }}
 {{- range until (.Values.get_jobs | int) }}
@@ -114,6 +118,8 @@ spec:
             value: us-east-1
           - name: AWS_SDK_LOAD_CONFIG
             value: "true"
+          - name: LOG
+            value: {{ quote $.Values.log }}
 ---
 {{- end }}
 {{- range until (.Values.put_jobs | int ) }}
@@ -147,5 +153,7 @@ spec:
           - name: AWS_REGION
             value: us-east-1
           - name: AWS_SDK_LOAD_CONFIG
-            value: "true"   
+            value: "true"
+          - name: LOG
+            value: {{ quote $.Values.log }}
 {{- end }}
