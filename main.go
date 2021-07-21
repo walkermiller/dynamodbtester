@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -29,7 +28,6 @@ var svc *dynamodb.DynamoDB = dynamodb.New(session.Must(session.NewSessionWithOpt
 var messages, messagestoprocess, threads int
 var action, table, primaryKey, sortKey string
 var batch, logswitch bool
-var startTime time.Time
 
 var results []string
 
@@ -51,16 +49,14 @@ func main() {
 	flag.BoolVar(&logswitch, "log", LookupEnvOrBool("LOG", false), "log results or not. Default is false")
 	flag.Parse()
 
-	startTime = time.Now()
-
 	if action == "query" {
 		messagestoprocess = 1
 	}
 
 	totalMessages := messagestoprocess * threads
 
-	if logswitch == false {
-		p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(fmt.Sprintf("Processing %d Messages", totalMessages)).Start()
+	if !logswitch {
+		p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(fmt.Sprintf("%s test of %d threads and %d Messages (total: %d)", strings.Title(action), threads, messagestoprocess, totalMessages)).Start()
 	}
 
 	var wg sync.WaitGroup
@@ -305,13 +301,13 @@ func threadQuery(wg *sync.WaitGroup, thread int) {
 }
 
 func logResult(result string) {
-	if logswitch == true {
+	if logswitch {
 		log.Println(result)
 	}
 }
 
 func incrementPB(i int) {
-	if logswitch == false {
+	if !logswitch {
 		p.Add(i)
 	}
 }
