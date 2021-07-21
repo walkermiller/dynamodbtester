@@ -57,7 +57,7 @@ spec:
           - name: ACTION
             value: get
           - name: BATCH
-            value: get
+            value: "true"
 
 ---
 {{- end }}
@@ -102,7 +102,7 @@ spec:
   template:
     metadata:
       labels:
-        action: get
+        action: put
     spec:
       serviceAccountName: dynamodb
       restartPolicy: Never
