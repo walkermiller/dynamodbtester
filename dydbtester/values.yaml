@@ -2,7 +2,7 @@ batch_get_jobs: 1
 get_jobs: 1
 query_jobs: 1
 #put_jobs: 1
-image: public.ecr.aws/j6o4r1h6/dynamodbtester:latest
+image: public.ecr.aws/j6o4r1h6/dynamodbtester:test
 env:
   threads: 100
   messages: 10000
