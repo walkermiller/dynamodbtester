@@ -16,20 +16,12 @@ spec:
       - name: dynamodbtester
         image: {{ quote $.Values.image }}
         env:
-          - name: THREADS
-            value: {{ quote $.Values.threads }}
+        {{- range $key, $val := $.Values.env }}
+          - name: {{ quote $key }}
+            value: {{ quote $val }}
+        {{- end }}
           - name: ACTION
             value: query
-          - name: TABLE
-            value: {{ quote $.Values.table }}
-          - name: PRIMARYKEY
-            value: {{ quote $.Values.primaryKey }}
-          - name: AWS_REGION
-            value: us-east-1
-          - name: AWS_SDK_LOAD_CONFIG
-            value: "true"
-          - name: LOG
-            value: {{ quote $.Values.log }}
         resources:
           requests:
             memory: 1024M
@@ -58,26 +50,15 @@ spec:
             memory: 1024M
             cpu: 250m
         env:
-          - name: MESSAGES
-            value: {{ quote $.Values.messages }}
-          - name: THREADS
-            value: {{ quote $.Values.threads }}
+        {{- range $key, $val := $.Values.env }}
+          - name: {{ quote $key }}
+            value: {{ quote $val }}
+        {{- end }}
           - name: ACTION
             value: get
-          - name: TABLE
-            value: {{ quote $.Values.table }}
-          - name: PRIMARYKEY
-            value: {{ quote $.Values.primaryKey }}
-          - name: SORTKEY
-            value: {{ quote $.Values.sortKey }}
           - name: BATCH
-            value: "true"
-          - name: AWS_REGION
-            value: us-east-1
-          - name: AWS_SDK_LOAD_CONFIG
-            value: "true"
-          - name: LOG
-            value: {{ quote $.Values.log }}
+            value: get
+
 ---
 {{- end }}
 {{- range until (.Values.get_jobs | int) }}
@@ -102,24 +83,13 @@ spec:
             memory: 1024M
             cpu: 250m
         env:
-          - name: MESSAGES
-            value: {{ quote $.Values.messages }}
-          - name: THREADS
-            value: {{ quote $.Values.threads }}
+        {{- range $key, $val := $.Values.env }}
+          - name: {{ quote $key }}
+            value: {{ quote $val }}
+        {{- end }}
           - name: ACTION
             value: get
-          - name: TABLE
-            value: {{ quote $.Values.table }}
-          - name: PRIMARYKEY
-            value: {{ quote $.Values.primaryKey }}
-          - name: SORTKEY
-            value: {{ quote $.Values.sortKey }}
-          - name: AWS_REGION
-            value: us-east-1
-          - name: AWS_SDK_LOAD_CONFIG
-            value: "true"
-          - name: LOG
-            value: {{ quote $.Values.log }}
+
 ---
 {{- end }}
 {{- range until (.Values.put_jobs | int ) }}
@@ -140,20 +110,10 @@ spec:
       - name: dynamodbtester
         image: {{ quote $.Values.image }}
         env:
-          - name: MESSAGES
-            value: {{ quote $.Values.messages}}
-          - name: THREADS
-            value: {{ quote $.Values.threads}}
+        {{- range $key, $val := $.Values.env }}
+          - name: {{ quote $key }}
+            value: {{ quote $val }}
+        {{- end }}
           - name: ACTION
             value: put
-          - name: TABLE
-            value: {{ quote $.Values.table }}
-          - name: PRIMARYKEY
-            value: {{ quote $.Values.primaryKey }}
-          - name: AWS_REGION
-            value: us-east-1
-          - name: AWS_SDK_LOAD_CONFIG
-            value: "true"
-          - name: LOG
-            value: {{ quote $.Values.log }}
 {{- end }}

@@ -1,10 +1,13 @@
 #batch_get_jobs: 25
-query_jobs: 100
+query_jobs: 10
 #put_jobs: 1
-threads: 100
-messages: 10000
-image: public.ecr.aws/j6o4r1h6/dynamodbtester:test
-primaryKey: AccountId
-sortKey: ResourceId
-table: Test
-Log: 
+image: public.ecr.aws/j6o4r1h6/dynamodbtester:latest
+env:
+  threads: 100
+  messages: 10000
+  primaryKey: AccountId
+  sortKey: ResourceId
+  table: Test
+  Log: false
+  AWS_REGION: us-east-1
+  AWS_SDK_LOAD_CONFIG: true
