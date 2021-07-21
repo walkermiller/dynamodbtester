@@ -9,6 +9,7 @@ spec:
     metadata:
       labels:
         action: query
+        purpose: dydbtester
     spec:
       serviceAccountName: dynamodb
       restartPolicy: Never
@@ -39,6 +40,7 @@ spec:
     metadata:
       labels:
         action: batch-get
+        purpose: dydbtester
     spec:
       serviceAccountName: dynamodb
       restartPolicy: Never
@@ -71,6 +73,7 @@ spec:
     metadata:
       labels:
         action: get
+        purpose: dydbtester
     spec:
       serviceAccountName: dynamodb
       restartPolicy: Never
@@ -101,6 +104,7 @@ spec:
     metadata:
       labels:
         action: put
+        purpose: dydbtester
     spec:
       serviceAccountName: dynamodb
       restartPolicy: Never
