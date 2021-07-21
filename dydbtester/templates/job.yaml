@@ -58,7 +58,6 @@ spec:
             value: get
           - name: BATCH
             value: "true"
-
 ---
 {{- end }}
 {{- range until (.Values.get_jobs | int) }}
@@ -89,7 +88,6 @@ spec:
         {{- end }}
           - name: ACTION
             value: get
-
 ---
 {{- end }}
 {{- range until (.Values.put_jobs | int ) }}
