@@ -18,7 +18,7 @@ spec:
         image: {{ quote $.Values.image }}
         env:
         {{- range $key, $val := $.Values.env }}
-          - name: {{ quote $key }}
+          - name: {{ $key }}
             value: {{ quote $val }}
         {{- end }}
           - name: ACTION
@@ -53,7 +53,7 @@ spec:
             cpu: 250m
         env:
         {{- range $key, $val := $.Values.env }}
-          - name: {{ quote $key }}
+          - name: {{ $key }}
             value: {{ quote $val }}
         {{- end }}
           - name: ACTION
@@ -86,7 +86,7 @@ spec:
             cpu: 250m
         env:
         {{- range $key, $val := $.Values.env }}
-          - name: {{ quote $key }}
+          - name: {{ $key }}
             value: {{ quote $val }}
         {{- end }}
           - name: ACTION
@@ -113,7 +113,7 @@ spec:
         image: {{ quote $.Values.image }}
         env:
         {{- range $key, $val := $.Values.env }}
-          - name: {{ quote $key }}
+          - name: {{ $key }}
             value: {{ quote $val }}
         {{- end }}
           - name: ACTION

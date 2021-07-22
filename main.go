@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -29,11 +30,13 @@ var messages, messagestoprocess, threads int
 var action, table, primaryKey, sortKey string
 var batch, logswitch bool
 
+var responseTimes []string
 var results []string
 
 var p *pterm.ProgressbarPrinter
 
 func main() {
+	defer recordResponseTime("Total time taken", time.Now())
 	// mySession, _ := session.NewSession(&aws.Config{
 	// 	EnableEndpointDiscovery: aws.Bool(true),
 	// })
@@ -55,30 +58,31 @@ func main() {
 
 	totalMessages := messagestoprocess * threads
 
-	if !logswitch {
-		p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(fmt.Sprintf("%s test of %d threads and %d Messages (total: %d)", strings.Title(action), threads, messagestoprocess, totalMessages)).Start()
-	}
+	title := fmt.Sprintf("%s test of %d threads and %d Messages (total: %d)", strings.Title(action), threads, messagestoprocess, totalMessages)
+	fmt.Println(title)
+
+	// p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(title).Start()
 
 	var wg sync.WaitGroup
 
 	for i := 1; i < threads+1; i++ {
-		wg.Add(1)
+		// wg.Add(1)
 		switch action {
 		case "put":
+			wg.Add(1)
 			go threadPut(messagestoprocess, &wg, i)
 		case "get":
+			wg.Add(1)
 			go threadGet(messagestoprocess, &wg, i)
 		case "query":
-			go threadQuery(&wg, i)
+			threadQuery(i)
 		}
 
 	}
 
 	wg.Wait()
 
-	if logswitch {
-		print(strings.Join(results, "\n"))
-	}
+	// print(strings.Join(responseTimes, "\n"))
 
 }
 
@@ -119,10 +123,10 @@ func putItems(startPosition int, thread int) {
 			PutRequest: &dynamodb.PutRequest{
 				Item: map[string]*dynamodb.AttributeValue{
 					primaryKey: {
-						N: aws.String(strconv.Itoa(thread)),
+						S: aws.String(strconv.Itoa(thread)),
 					},
 					sortKey: {
-						N: aws.String(strconv.Itoa(i)),
+						S: aws.String(strconv.Itoa(i)),
 					},
 				},
 			},
@@ -155,10 +159,10 @@ func getItem(primaryKeyValue, sortKeyValue string) {
 		TableName: aws.String(table),
 		Key: map[string]*dynamodb.AttributeValue{
 			primaryKey: {
-				N: aws.String(primaryKeyValue),
+				S: aws.String(primaryKeyValue),
 			},
 			sortKey: {
-				N: aws.String(sortKeyValue),
+				S: aws.String(sortKeyValue),
 			},
 		},
 	}
@@ -188,10 +192,10 @@ func batchGetItem(startPosition, thread int) {
 
 		newEntry := map[string]*dynamodb.AttributeValue{
 			primaryKey: {
-				N: aws.String(strconv.Itoa(thread)),
+				S: aws.String(strconv.Itoa(thread)),
 			},
 			sortKey: {
-				N: aws.String(strconv.Itoa(i)),
+				S: aws.String(strconv.Itoa(i)),
 			},
 		}
 		items = append(items, newEntry)
@@ -233,17 +237,18 @@ func batchGetItem(startPosition, thread int) {
 }
 
 func query(primaryKeyValue int) {
+	defer recordResponseTime(fmt.Sprintf("Query response time for key %d", primaryKeyValue), time.Now())
 	input := &dynamodb.QueryInput{
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":v1": {
-				N: aws.String(strconv.Itoa(primaryKeyValue)),
+				S: aws.String(strconv.Itoa(primaryKeyValue)),
 			},
 		},
 		KeyConditionExpression: aws.String(fmt.Sprintf("%s = :v1", primaryKey)),
 		TableName:              aws.String(table),
 	}
-
 	_, err := svc.Query(input)
+
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -270,18 +275,17 @@ func query(primaryKeyValue int) {
 }
 
 func threadPut(m int, wg *sync.WaitGroup, thread int) {
-	defer incrementPB(m)
 	defer wg.Done()
 
 	for i := 1; i < m+1; i += 25 {
 		putItems(((thread-1)*m)+i, thread)
 	}
+	// incrementPB(m)
 
 }
 
 func threadGet(m int, wg *sync.WaitGroup, thread int) {
 	defer wg.Done()
-	defer incrementPB(m)
 	for i := 1; i < m+1; i += 1 {
 		switch batch {
 		case true:
@@ -291,13 +295,14 @@ func threadGet(m int, wg *sync.WaitGroup, thread int) {
 			getItem(strconv.Itoa(thread), strconv.Itoa(((thread-1)*m)+1))
 		}
 	}
+	// incrementPB(m)
 }
 
-func threadQuery(wg *sync.WaitGroup, thread int) {
-	defer wg.Done()
-	defer incrementPB(1)
+func threadQuery(thread int) {
+	// defer wg.Done()
+	// startTime := time.Now()
 	query(thread)
-
+	// incrementPB(1)
 }
 
 func logResult(result string) {
@@ -310,4 +315,8 @@ func incrementPB(i int) {
 	if !logswitch {
 		p.Add(i)
 	}
+}
+
+func recordResponseTime(message string, startTime time.Time) {
+	log.Printf("%s: %dms", message, time.Since(startTime).Milliseconds())
 }
