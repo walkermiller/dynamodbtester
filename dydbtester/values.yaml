@@ -2,12 +2,12 @@
 #get_jobs: 1
 query_jobs: 100
 #put_jobs: 1
-image: public.ecr.aws/j6o4r1h6/dynamodbtester:test
+image: 074767584099.dkr.ecr.us-east-1.amazonaws.com/dynamodbtester:test
 env:
   THREADS: 100
   MESSAGES: 100
   PRIMARYKEY: accountId
   SORTKEY: resourceId
-  TABLE: TestString
+  TABLE: pending_transaction_events
   AWS_REGION: us-east-1
   AWS_SDK_LOAD_CONFIG: true

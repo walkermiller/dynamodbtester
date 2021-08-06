@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -14,7 +16,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/pterm/pterm"
+
+	"golang.org/x/net/http2"
 )
 
 type Entry struct {
@@ -22,25 +25,48 @@ type Entry struct {
 	AccountId  int
 }
 
-var svc *dynamodb.DynamoDB = dynamodb.New(session.Must(session.NewSessionWithOptions(session.Options{
-	SharedConfigState: session.SharedConfigEnable,
-})))
+type HTTPClientSettings struct {
+	Connect          time.Duration
+	ConnKeepAlive    time.Duration
+	ExpectContinue   time.Duration
+	IdleConn         time.Duration
+	MaxAllIdleConns  int
+	MaxHostIdleConns int
+	ResponseHeader   time.Duration
+	TLSHandshake     time.Duration
+}
+
+var svc *dynamodb.DynamoDB
 
 var messages, messagestoprocess, threads int
 var action, table, primaryKey, sortKey string
 var batch, logswitch bool
+var wg sync.WaitGroup
 
-var responseTimes []string
-var results []string
+// var results chan string
 
-var p *pterm.ProgressbarPrinter
+// var p *pterm.ProgressbarPrinter
 
 func main() {
-	defer recordResponseTime("Total time taken", time.Now())
-	// mySession, _ := session.NewSession(&aws.Config{
-	// 	EnableEndpointDiscovery: aws.Bool(true),
-	// })
-	// svc = dynamodb.New(mySession)
+
+	// results = make(chan string)
+	httpClient, _ := NewHTTPClientWithSettings(HTTPClientSettings{
+		Connect:          5 * time.Second,
+		ExpectContinue:   1 * time.Second,
+		IdleConn:         0,
+		ConnKeepAlive:    30 * time.Second,
+		MaxAllIdleConns:  0,
+		MaxHostIdleConns: 4000,
+		ResponseHeader:   5 * time.Second,
+		TLSHandshake:     5 * time.Second,
+	})
+
+	svc = dynamodb.New(session.Must(session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			HTTPClient: httpClient,
+		},
+		SharedConfigState: session.SharedConfigEnable,
+	})))
 
 	flag.IntVar(&messagestoprocess, "messages", LookupEnvOrInt("MESSAGES", 100), "messages to run per thread")
 	flag.IntVar(&threads, "threads", LookupEnvOrInt("THREADS", 10), "number of threads to run")
@@ -56,14 +82,18 @@ func main() {
 		messagestoprocess = 1
 	}
 
+	// This initializes the svc to begin with.
+	_, err := svc.DescribeTable(&dynamodb.DescribeTableInput{
+		TableName: aws.String(table),
+	})
+	dydbError(err)
+
 	totalMessages := messagestoprocess * threads
 
 	title := fmt.Sprintf("%s test of %d threads and %d Messages (total: %d)", strings.Title(action), threads, messagestoprocess, totalMessages)
 	fmt.Println(title)
 
 	// p, _ = pterm.DefaultProgressbar.WithTotal(totalMessages).WithTitle(title).Start()
-
-	var wg sync.WaitGroup
 
 	for i := 1; i < threads+1; i++ {
 		// wg.Add(1)
@@ -75,11 +105,15 @@ func main() {
 			wg.Add(1)
 			go threadGet(messagestoprocess, &wg, i)
 		case "query":
-			threadQuery(i)
+			// query(i)
+			go threadQuery(i)
 		}
 
 	}
-
+	// for result := range results {
+	// 	log.Println(result)
+	// }
+	// close(results)
 	wg.Wait()
 
 	// print(strings.Join(responseTimes, "\n"))
@@ -142,11 +176,9 @@ func putItems(startPosition int, thread int) {
 			table: items,
 		},
 	}
-
+	// log.Println(items)
 	_, err := svc.BatchWriteItem(input)
-	if err != nil {
-		log.Fatalf("Thread %d Got error calling BatchWriteItem: %s", thread, err)
-	}
+	dydbError(err)
 	// logResult(result.String())
 	// log.Printf("Thread %d finished %d", thread, finalPosition)
 
@@ -168,9 +200,7 @@ func getItem(primaryKeyValue, sortKeyValue string) {
 	}
 	// println(input.Key)
 	_, err := svc.GetItem(input)
-	if err != nil {
-		log.Fatalf("Got error calling GetItem: %s", err)
-	}
+	dydbError(err)
 	// if result.Item == nil {
 	// 	msg, _ := fmt.Printf("Could not find primaryKey %s with sortKey %s", primaryKeyValue, sortKeyValue)
 	// 	log.Print(msg)
@@ -211,67 +241,33 @@ func batchGetItem(startPosition, thread int) {
 	}
 
 	_, err := svc.BatchGetItem(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case dynamodb.ErrCodeProvisionedThroughputExceededException:
-				fmt.Println(dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
-			case dynamodb.ErrCodeResourceNotFoundException:
-				fmt.Println(dynamodb.ErrCodeResourceNotFoundException, aerr.Error())
-			case dynamodb.ErrCodeRequestLimitExceeded:
-				fmt.Println(dynamodb.ErrCodeRequestLimitExceeded, aerr.Error())
-			case dynamodb.ErrCodeInternalServerError:
-				fmt.Println(dynamodb.ErrCodeInternalServerError, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
+	dydbError(err)
 	// logResult(result.String())
 
 }
 
 func query(primaryKeyValue int) {
-	defer recordResponseTime(fmt.Sprintf("Query response time for key %d", primaryKeyValue), time.Now())
+
 	input := &dynamodb.QueryInput{
+
+		ReturnConsumedCapacity: aws.String(dynamodb.ReturnConsumedCapacityTotal),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":v1": {
-				S: aws.String(strconv.Itoa(primaryKeyValue)),
+				N: aws.String(strconv.Itoa(primaryKeyValue)),
 			},
 		},
 		KeyConditionExpression: aws.String(fmt.Sprintf("%s = :v1", primaryKey)),
 		TableName:              aws.String(table),
 	}
-	_, err := svc.Query(input)
 
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case dynamodb.ErrCodeProvisionedThroughputExceededException:
-				fmt.Println(dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
-			case dynamodb.ErrCodeResourceNotFoundException:
-				fmt.Println(dynamodb.ErrCodeResourceNotFoundException, aerr.Error())
-			case dynamodb.ErrCodeRequestLimitExceeded:
-				fmt.Println(dynamodb.ErrCodeRequestLimitExceeded, aerr.Error())
-			case dynamodb.ErrCodeInternalServerError:
-				fmt.Println(dynamodb.ErrCodeInternalServerError, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
+	beginTime := time.Now()
+	response, err := svc.Query(input)
+	log.Printf("Key: %d, Count: %d, Capacity Consumed: %f, Reponse Time: %dms",
+		primaryKeyValue,
+		*response.Count,
+		*response.ConsumedCapacity.CapacityUnits, time.Since(beginTime).Milliseconds())
 
-	// logResult(result.String())
+	dydbError(err)
 }
 
 func threadPut(m int, wg *sync.WaitGroup, thread int) {
@@ -299,24 +295,73 @@ func threadGet(m int, wg *sync.WaitGroup, thread int) {
 }
 
 func threadQuery(thread int) {
-	// defer wg.Done()
+	defer wg.Done()
+	wg.Add(1)
 	// startTime := time.Now()
 	query(thread)
 	// incrementPB(1)
 }
 
-func logResult(result string) {
-	if logswitch {
-		log.Println(result)
+// func incrementPB(i int) {
+// 	if !logswitch {
+// 		p.Add(i)
+// 	}
+// }
+
+// func recordResponseTime(message string, startTime time.Time, total int) {
+// 	dur := time.Since(startTime).Seconds()
+// 	log.Printf("%s: %fs. Avg Response: %fs", message, dur, (float64(total) / dur))
+// }
+
+func NewHTTPClientWithSettings(httpSettings HTTPClientSettings) (*http.Client, error) {
+	var client http.Client
+	tr := &http.Transport{
+		ResponseHeaderTimeout: httpSettings.ResponseHeader,
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			KeepAlive: httpSettings.ConnKeepAlive,
+			DualStack: true,
+			Timeout:   httpSettings.Connect,
+		}).DialContext,
+		MaxIdleConns:          httpSettings.MaxAllIdleConns,
+		MaxConnsPerHost:       0,
+		IdleConnTimeout:       httpSettings.IdleConn,
+		TLSHandshakeTimeout:   httpSettings.TLSHandshake,
+		MaxIdleConnsPerHost:   httpSettings.MaxHostIdleConns,
+		ExpectContinueTimeout: httpSettings.ExpectContinue,
 	}
+
+	// So client makes HTTP/2 requests
+	err := http2.ConfigureTransport(tr)
+	if err != nil {
+		return &client, err
+	}
+
+	return &http.Client{
+		Transport: tr,
+	}, nil
 }
 
-func incrementPB(i int) {
-	if !logswitch {
-		p.Add(i)
+func dydbError(err error) {
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case dynamodb.ErrCodeProvisionedThroughputExceededException:
+				fmt.Println(dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
+			case dynamodb.ErrCodeResourceNotFoundException:
+				fmt.Println(dynamodb.ErrCodeResourceNotFoundException, aerr.Error())
+			case dynamodb.ErrCodeRequestLimitExceeded:
+				fmt.Println(dynamodb.ErrCodeRequestLimitExceeded, aerr.Error())
+			case dynamodb.ErrCodeInternalServerError:
+				fmt.Println(dynamodb.ErrCodeInternalServerError, aerr.Error())
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+		return
 	}
-}
-
-func recordResponseTime(message string, startTime time.Time) {
-	log.Printf("%s: %dms", message, time.Since(startTime).Milliseconds())
 }
